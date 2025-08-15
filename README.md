@@ -27,7 +27,6 @@ The project is organized into the following directory structure:
 │   ├── index.html            # The main web page UI  
 │   └── style.css             # Styling for the web page  
 └── work  
-    ├── doors.csv             # Inventory list for door RFID tags  
     └── inventory.csv         # Main inventory list for all other items
 ```
 
@@ -38,7 +37,6 @@ The project is organized into the following directory structure:
 * **web-app/app.js**: The client-side logic. It establishes a WebSocket connection with the server, listens for inventory updates, and dynamically updates the table on the webpage. It also handles user interaction with the "Start" and "Stop" buttons.  
 * **web-app/style.css**: The stylesheet for the web interface, providing a clean and responsive design.  
 * **work/inventory.csv**: A CSV file containing the master list of RFID tags to be tracked. The columns are id, EPC, and item.  
-* **work/doors.csv**: Another CSV file for a separate inventory of door tags.
 
 ## **Usage**
 
@@ -145,62 +143,4 @@ You can customize the application's behavior using the following command-line ar
 6.  Click **"Stop Scanning"** to end the session. This will also trigger the saving of a detailed log.
 
 To **gracefully shut down** the application, press `Ctrl+C` in the terminal where the program is running. A log file named **`epc_scan_data.tsv`** will be saved in your project's root directory.
-
-
-### **Optional: Autostart on Raspberry Pi**
-
-To make the RFID server start automatically whenever your Raspberry Pi is powered on, you can create a systemd service. This is the standard way to manage services on modern Linux systems.
-
-#### **1\. Create the systemd Service File**
-
-First, create a new service file named rfid-server.service in the /etc/systemd/system/ directory.
-
-```bash
-sudo nano /etc/systemd/system/rfid-server.service
-```
-
-#### **2\. Add the Service Configuration**
-
-Copy and paste the following content into the file. Be sure to change `/home/pi/smart-fridge/` to the actual path of your project on the Raspberry Pi.
-
-```
-[Unit]  
-Description=RFID Server for Smart Fridge
-After=network.target
-
-[Service]
-ExecStart=/usr/bin/node /home/pi/smart-fridge/index.js --mode=inventory --inventory=/home/pi/smart-fridge/work/inventory.csv --refresh-period=3 --dbg=0  
-WorkingDirectory=/home/pi/smart-fridge 
-Restart=always  
-User=pi  
-Environment=PATH=/usr/bin:/usr/local/bin  
-Environment=NODE_ENV=production
-
-[Install]  
-WantedBy=multi-user.target
-```
-
-* ExecStart: Specifies the command that will be run to start the service.  
-* WorkingDirectory: Sets the directory where the command will be executed, which is essential for the script to find its relative paths.  
-* User: Runs the service as the pi user, which has the necessary permissions.  
-* Restart: Ensures the service automatically restarts if it crashes.
-
-#### **3\. Enable and Start the Service**
-
-After saving the file, run the following commands to enable the service and start it immediately.
-
-```bash
-sudo systemctl enable rfid-server.service  
-sudo systemctl start rfid-server.service
-```
-
-#### **4\. Check the Status**
-
-You can check the status of your service to make sure it's running correctly.
-
-```bash
-sudo systemctl status rfid-server.service
-```
-
-Now, your RFID server will automatically launch every time your Raspberry Pi boots up!
 
