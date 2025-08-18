@@ -71,10 +71,11 @@ Then, git clone the code with the following command
 git clone https://github.com/clementyu/smart-fridge.git
 ```
 
-After cloning the source code, navigate to the project directory.
+After cloning the source code, navigate to the project directory and enable the environment variables.
 
 ```bash
 cd smart-fridge
+cp ./env-sample.md ./.env
 ```
 
 Next, you need to install **nvm (Node Version Manager)** to easily manage your Node.js versions.
@@ -116,7 +117,7 @@ id,EPC,item
 To start the application, run the index.js file with Node.js.
 
 ```bash
-node index.js --mode=inventory --inventory=./work/inventory.csv --refresh-period=3 --dbg=0
+node index.js --mode=inventory --inventory=./work/inventory.csv --refresh-period=10 --dbg=0
 ```
 
 By default, the application will start in inventory mode and check for the inventory.csv file. The `web interface` will be available at http://smart-fridge.local:8080.
