@@ -45,11 +45,14 @@ The project is organized into the following directory structure:
 Before you begin, ensure you have the following hardware:
 
   * **Hardware:**
-      * A Raspberry Pi 4
-      * An RFID reader module (e.g., model KLM900P with antenna)
-      * A USB to UART cable and a 15-pin ribbon cable for connecting the reader to the Pi
-      * UHF RFID tags for your items
-      * A microSD card for the Raspberry Pi's operating system (A 32GB microSD card is recommanded)
+   * A Raspberry Pi 4
+   * An RFID reader module (e.g., model KLM900P with antenna)
+![](smart-fridge-hardware.jpeg)
+   * A USB to UART cable and a 15-pin ribbon cable for connecting the reader to the Pi
+![](klm900p-15p-pinout.png)
+   * UHF RFID tags for your items
+![](smart-fridge-rfid-tags.jpeg)
+   * A microSD card for the Raspberry Pi's operating system (A 32GB microSD card is recommanded)
 
 
 ### **Initial Setup**
