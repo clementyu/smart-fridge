@@ -169,6 +169,8 @@ async function main() {
           const idIndex = headers.indexOf('id');
           const epcIndex = headers.indexOf('EPC');
           const itemIndex = headers.indexOf('item');
+          const expirationDateIndex = headers.indexOf('expiration_date');
+
           if (epcIndex === -1) {
               if (isDbgLogEnabled) console.error('❌ Error: The inventory CSV file must have an "EPC" column.');
               return;
@@ -179,7 +181,8 @@ async function main() {
               const id = idIndex !== -1 ? parseInt(values[idIndex], 10) : i;
               const epc = values[epcIndex].trim();
               const item = itemIndex !== -1 ? values[itemIndex].trim() : 'N/A';
-              if (epc) { inventoryData.set(epc, { id, epc, item }); }
+              const expiration_date = expirationDateIndex !== -1 ? values[expirationDateIndex].trim() : null;
+              if (epc) { inventoryData.set(epc, { id, epc, item, expiration_date }); }
           }
   }
 
@@ -463,7 +466,7 @@ async function main() {
     scannedTagsRefresh.forEach((data, epc) => {
         const item = inventoryData.get(epc);
         if (item) {
-            inventoryUpdates.push({ id: item.id, timestamp: data.timestamp, epc, item: item.item, count: data.count });
+            inventoryUpdates.push({ id: item.id, timestamp: data.timestamp, epc, item: item.item, count: data.count, expiration_date: item.expiration_date });
         }
     });
     scannedTagsRefresh.clear();

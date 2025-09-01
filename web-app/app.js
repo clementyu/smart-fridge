@@ -3,6 +3,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const epcTableBody = document.getElementById('epc-table-body');
     const itemSummaryTableBody = document.getElementById('item-summary-table-body');
+    const expirationStatusContainer = document.getElementById('expiration-status-container');
     const statusIndicator = document.getElementById('connection-status');
     const scanningStatus = document.getElementById('scanning-status');
     const startBtn = document.getElementById('start-btn');
@@ -70,6 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 renderTables(itemSummary);
+                renderExpirationStatus();
             } else if (data.epc && isReadTagActive) { // Only update if read tag is active
               lastScannedEpc.textContent = data.epc;
               readTagContainer.classList.add('visible');
@@ -132,6 +134,34 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         });
     }
+
+    function renderExpirationStatus() {
+        expirationStatusContainer.innerHTML = '';
+        const now = new Date();
+        const oneWeekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+        inventoryData.forEach(item => {
+            if (item.count > 0 && item.expiration_date) {
+                const expirationDate = new Date(item.expiration_date);
+                let statusDiv = null;
+
+                if (expirationDate < now) {
+                    statusDiv = document.createElement('div');
+                    statusDiv.className = 'expiration-item expired';
+                    statusDiv.textContent = `${item.item} (EPC: ${item.epc}) has expired on ${item.expiration_date}.`;
+                } else if (expirationDate <= oneWeekFromNow) {
+                    statusDiv = document.createElement('div');
+                    statusDiv.className = 'expiration-item expiring-soon';
+                    statusDiv.textContent = `${item.item} (EPC: ${item.epc}) is expiring soon on ${item.expiration_date}.`;
+                }
+
+                if (statusDiv) {
+                    expirationStatusContainer.appendChild(statusDiv);
+                }
+            }
+        });
+    }
+
 
     startBtn.addEventListener('click', () => {
         if (shouldClearOnStart) {
