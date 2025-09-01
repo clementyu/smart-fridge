@@ -150,7 +150,7 @@ To **gracefully shut down** the application, press `Ctrl+C` in the terminal wher
 
 
 ### [Optional] Make the server running once Raspberry Pi is powered on
-Use the following command to launch the Smart Toolbox webserver and RFID scanning while Raspberry Pi booted up. 
+Use the following command to launch the Smart Fridge webserver and RFID scanning while Raspberry Pi booted up. 
 
 * Install pm2
 
@@ -172,7 +172,7 @@ sudo env PATH=$PATH:/home/pi/.nvm/versions/node/v22.18.0/bin /usr/local/lib/node
 
 ```bash
 cd /home/pi/smart-fridge
-pm2 start index.js --name smart-fridge -- --mode=inventory --inventory=/home/pi/smart-toolbox/work/inventory.csv --refresh-period=5 --dbg=0 -p /dev/ttyUSB0 -b 115200
+pm2 start index.js --name smart-fridge -- --mode=inventory --inventory=/home/pi/smart-fridge/work/inventory.csv --refresh-period=5 --dbg=0 -p /dev/ttyUSB0 -b 115200
 pm2 save
 sudo reboot -p
 ```

@@ -4,11 +4,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const epcTableBody = document.getElementById('epc-table-body');
     const itemSummaryTableBody = document.getElementById('item-summary-table-body');
     const statusIndicator = document.getElementById('connection-status');
+    const scanningStatus = document.getElementById('scanning-status');
     const startBtn = document.getElementById('start-btn');
     const stopBtn = document.getElementById('stop-btn');
-    
+    const readTagBtn = document.getElementById('read-tag-btn');
+    const exportBtn = document.getElementById('export-btn');
+    const importBtn = document.getElementById('import-btn');
+    const importFileInput = document.getElementById('import-file');
+    const lastScannedEpc = document.getElementById('last-scanned-epc');
+    const readTagContainer = document.querySelector('.read-tag-container');
+
     // Store the inventory data received from the backend
     let inventoryData = [];
+    let shouldClearOnStart = true; // New flag to control clearing inventory
+    let isReadTagActive = false; // New flag to control "Read Tag" updates
 
     let ws;
 
@@ -27,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ws.onmessage = event => {
             // Parse the incoming JSON data
             const data = JSON.parse(event.data);
-            
+
             if (data.initialInventory) {
                 // Initialize inventoryData with all items from the backend,
                 // setting count to 0 for all of them initially.
@@ -35,12 +44,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('Received initial inventory list:', inventoryData);
                 renderTables();
             } else if (data.updates) {
-                // Reset scanned times for all items before processing the new batch
-                inventoryData.forEach(item => {
-                    item.count = 0;
-                    item.timestamp = null;
-                });
-                
+                readTagContainer.classList.remove('visible');
+
                 const itemSummary = new Map();
 
                 // Update the inventory data with new scanned times
@@ -51,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         existingItem.timestamp = update.timestamp;
                     }
                 });
-                
+
                 // Calculate item summary based on the updated inventory data
                 inventoryData.forEach(item => {
                     const currentItemSummary = itemSummary.get(item.item) || { count: 0, lastScanned: null };
@@ -65,6 +70,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 renderTables(itemSummary);
+            } else if (data.epc && isReadTagActive) { // Only update if read tag is active
+              lastScannedEpc.textContent = data.epc;
+              readTagContainer.classList.add('visible');
             }
         };
 
@@ -126,6 +134,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     startBtn.addEventListener('click', () => {
+        if (shouldClearOnStart) {
+            inventoryData.forEach(item => {
+                item.count = 0;
+                item.timestamp = null;
+            });
+            renderTables();
+            shouldClearOnStart = false;
+        }
+        readTagContainer.classList.remove('visible');
+        scanningStatus.textContent = 'Scanning';
+        scanningStatus.classList.remove('idle');
+        scanningStatus.classList.add('scanning');
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send('start');
         } else {
@@ -134,12 +154,60 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     stopBtn.addEventListener('click', () => {
+        shouldClearOnStart = true; // Set flag to clear on next start
+        isReadTagActive = false; // Deactivate read tag updates
+        scanningStatus.textContent = 'Idle';
+        scanningStatus.classList.remove('scanning');
+        scanningStatus.classList.add('idle');
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send('stop');
         } else {
             console.error('WebSocket not connected. Cannot send command.');
         }
     });
+
+    readTagBtn.addEventListener('click', () => {
+        isReadTagActive = true; // Activate read tag updates
+        lastScannedEpc.textContent = 'Scanning...';
+        readTagContainer.classList.add('visible');
+        scanningStatus.textContent = 'Scanning';
+        scanningStatus.classList.remove('idle');
+        scanningStatus.classList.add('scanning');
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send('read-tag');
+        } else {
+            console.error('WebSocket not connected. Cannot send command.');
+        }
+    });
+
+    exportBtn.addEventListener('click', () => {
+        window.location.href = '/download-inventory';
+    });
+
+    importBtn.addEventListener('click', () => {
+        importFileInput.click();
+    });
+
+    importFileInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (!file) {
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const content = e.target.result;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(`upload_inventory:${content}`);
+            } else {
+                console.error('WebSocket not connected. Cannot upload inventory.');
+            }
+        };
+        reader.readAsText(file);
+        // Reset file input so the same file can be uploaded again
+        event.target.value = null;
+    });
+
 
     connectWebSocket();
 });

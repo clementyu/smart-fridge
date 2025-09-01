@@ -30,6 +30,9 @@ h1 {
 
 .status-panel {
     margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
 }
 
 .status-indicator {
@@ -48,14 +51,23 @@ h1 {
     background-color: #dc3545;
 }
 
-.controls {
+.status-indicator.scanning {
+    background-color: #007bff;
+}
+
+.status-indicator.idle {
+    background-color: #6c757d;
+}
+
+.controls, .inventory-controls {
     margin-bottom: 1rem;
     display: flex;
     justify-content: center;
     gap: 1rem;
+    flex-wrap: wrap;
 }
 
-.controls button {
+.controls button, .inventory-controls button {
     padding: 0.75rem 1.5rem;
     font-size: 1rem;
     font-weight: 600;
@@ -84,12 +96,51 @@ h1 {
     background-color: #5a6268;
 }
 
-.file-upload-controls {
-    margin-bottom: 2rem;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 1rem;
+#read-tag-btn {
+    background-color: #17a2b8;
+    color: #fff;
+}
+
+#read-tag-btn:hover {
+    background-color: #138496;
+}
+
+#export-btn {
+    background-color: #28a745;
+    color: white;
+}
+
+#export-btn:hover {
+    background-color: #218838;
+}
+
+#import-btn {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+#import-btn:hover {
+    background-color: #e0a800;
+}
+
+
+.read-tag-container {
+    display: none; /* Hide by default */
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background-color: #e9ecef;
+    border-radius: 8px;
+}
+
+.read-tag-container.visible {
+    display: block; /* Show when .visible class is added */
+}
+
+#last-scanned-epc {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #007bff;
+    word-break: break-all;
 }
 
 .table-container {

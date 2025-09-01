@@ -7,9 +7,6 @@ const { SerialPort } = require('serialport');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config(); // Load environment variables from .env file
-// yargs is now dynamically imported to resolve ERR_REQUIRE_ESM
-// const yargs = require('yargs/yargs');
-// const { hideBin } = require('yargs/helpers');
 
 // --- Constants ---
 const Constants = {
@@ -21,10 +18,11 @@ const Constants = {
   MODE_AUTO: 'auto',
   MODE_INVENTORY: 'inventory',
   MODE_INTERACTIVE: 'interactive',
+  MODE_READ_TAG: 'read-tag',
 
   // Protocol bytes
   HEADER_BYTE: 0xFF,
-  
+
   // Command Codes
   CMD_START_APP: 0x04,
   CMD_GET_RUNNING_STAGE: 0x0C,
@@ -37,13 +35,13 @@ const Constants = {
 
   // Status Codes
   STATUS_SUCCESS: 0x0000,
-  
+
   // Hex commands (without CRC)
   HEX_START_APP: 'ff00041d0b',
   HEX_GET_RUNNING_STAGE: 'ff000c1d03',
   HEX_SCAN_START: 'ff13aa4d6f64756c6574656368aa480000000000f2bbe1cb',
   HEX_SCAN_STOP: 'ff0eaa4d6f64756c6574656368aa49f3bb',
-  
+
   // File and output strings
   TSV_FILE_NAME: 'epc_scan_data.tsv',
   TSV_HEADER: ['id', 'timestamp', 'EPC', 'item', 'scanned times'].join('\t'),
@@ -92,7 +90,7 @@ class CRC {
 async function main() {
   const yargs = (await import('yargs')).default;
   const { hideBin } = await import('yargs/helpers');
-  
+
   const argv = yargs(hideBin(process.argv))
     .option('port', {
         alias: 'p',
@@ -110,7 +108,7 @@ async function main() {
       alias: 'm',
       type: 'string',
       default: Constants.MODE_AUTO,
-      describe: 'Operational mode: auto, inventory, or interactive.'
+      describe: 'Operational mode: auto, inventory, interactive, or read-tag.'
     })
     .option('inventory', {
       alias: 'i',
@@ -150,13 +148,23 @@ async function main() {
   const scannedTagsRefresh = new Map();
   const inventoryData = new Map();
   let wsClients = [];
+  let readTagScans = new Map(); // New map to track scans in read-tag mode
 
   // --- Inventory Loading Function ---
   function loadInventory(filePath) {
       if (isDbgLogEnabled) console.log('[DEBUG] Entering function loadInventory');
       try {
           const data = fs.readFileSync(filePath, 'utf8');
-          const lines = data.split('\n').filter(line => line.trim() !== '');
+          parseInventoryData(data);
+      } catch (err) {
+          if (isDbgLogEnabled) console.error('❌ Failed to read or parse the inventory CSV file:', err);
+      }
+  }
+
+  function parseInventoryData(csvData) {
+      inventoryData.clear();
+      const lines = csvData.split('\n').filter(line => line.trim() !== '');
+      if (lines.length === 0) return;
           const headers = lines[0].split(',').map(header => header.trim());
           const idIndex = headers.indexOf('id');
           const epcIndex = headers.indexOf('EPC');
@@ -173,9 +181,6 @@ async function main() {
               const item = itemIndex !== -1 ? values[itemIndex].trim() : 'N/A';
               if (epc) { inventoryData.set(epc, { id, epc, item }); }
           }
-      } catch (err) {
-          if (isDbgLogEnabled) console.error('❌ Failed to read or parse the inventory CSV file:', err);
-      }
   }
 
   // --- Initialize Serial Port ---
@@ -200,7 +205,10 @@ async function main() {
       refreshIntervalId = setInterval(logScannedTags, refreshPeriod * 1000);
       if (mode === Constants.MODE_INVENTORY) {
         console.log('✅ Scanning session started in inventory mode. Output will be sent via WebSocket every ' + refreshPeriod + ' seconds.');
-      } else {
+      } else if (mode === Constants.MODE_READ_TAG) {
+        console.log('✅ Scanning session started in read-tag mode.  Output will be sent via WebSocket.');
+      }
+      else {
         console.log('✅ Scanning session started in auto mode. Output will be sent via WebSocket every ' + refreshPeriod + ' seconds.');
       }
     } else if (hexString.startsWith(Constants.HEX_SCAN_STOP)) {
@@ -215,12 +223,12 @@ async function main() {
 
   function parseResponse(buffer) {
     if (isDbgLogEnabled) console.log('[DEBUG] Entering function parseResponse');
-    
+
     if (isDbgLogEnabled) {
       console.log(`[DEBUG] Received Raw Packet: ${buffer.toString('hex').toUpperCase().match(/.{1,2}/g).join(' ')}`);
     }
 
-    if (buffer[0] !== Constants.HEADER_BYTE) { 
+    if (buffer[0] !== Constants.HEADER_BYTE) {
       if (isDbgLogEnabled) {
         console.log('[DEBUG] Header check failed. Dropping packet.');
       }
@@ -233,25 +241,25 @@ async function main() {
     const payloadStartIndex = 5;
     const payloadEndIndex = payloadStartIndex + dataLength;
     const payload = buffer.slice(payloadStartIndex, payloadEndIndex);
-    
+
     if (isDbgLogEnabled) {
       console.log(`[DEBUG] Command: 0x${commandCode.toString(16).toUpperCase()}, Status: 0x${statusCode.toString(16).toUpperCase()}`);
     }
-    
+
     if (commandCode === Constants.CMD_START_APP && buffer.toString('hex') === 'ff1404000000000000a4000300202205232205230000000010377c') {
-      if (mode === Constants.MODE_AUTO || mode === Constants.MODE_INVENTORY) {
+      if (mode === Constants.MODE_AUTO || mode === Constants.MODE_INVENTORY || mode === Constants.MODE_READ_TAG) {
         autoModeState = 2;
         sendWithCrc(Buffer.from(Constants.HEX_SCAN_START, 'hex'));
       }
     } else if (commandCode === Constants.CMD_GET_RUNNING_STAGE) {
       const runningStage = payload[0];
       if (runningStage === Constants.STAGE_APP) {
-        if (mode === Constants.MODE_AUTO || mode === Constants.MODE_INVENTORY && autoModeState === 1) {
+        if ((mode === Constants.MODE_AUTO || mode === Constants.MODE_INVENTORY || mode === Constants.MODE_READ_TAG) && autoModeState === 1) {
           autoModeState = 2;
           sendWithCrc(Buffer.from(Constants.HEX_SCAN_START, 'hex'));
         }
       } else if (runningStage === Constants.STAGE_BOOTLOADER) {
-        if (mode === Constants.MODE_AUTO || mode === Constants.MODE_INVENTORY && autoModeState === 1) {
+        if ((mode === Constants.MODE_AUTO || mode === Constants.MODE_INVENTORY || mode === Constants.MODE_READ_TAG) && autoModeState === 1) {
           autoModeState = 0;
           sendWithCrc(Buffer.from(Constants.HEX_START_APP, 'hex'));
         }
@@ -260,18 +268,42 @@ async function main() {
       const epcData = payload.slice(5, payload.length - 2);
       const epcHex = epcData.toString('hex').toUpperCase();
 
-      if (inventoryMode && !inventoryData.has(epcHex)) { 
+      if (mode === Constants.MODE_READ_TAG) {
+        // Increment count for the scanned tag in the current session
+        const currentCount = (readTagScans.get(epcHex) || 0) + 1;
+        readTagScans.set(epcHex, currentCount);
+
+        // Find the EPC with the highest count in the current session
+        let mostFrequentEpc = '';
+        let maxCount = 0;
+        for (const [epc, count] of readTagScans.entries()) {
+            if (count > maxCount) {
+                maxCount = count;
+                mostFrequentEpc = epc;
+            }
+        }
+        
+        // Send only the most frequent EPC to the clients
+        wsClients.forEach(client => {
+            if (client.readyState === 1) {
+                client.send(JSON.stringify({ epc: mostFrequentEpc }));
+            }
+        });
+        return; // Exit after handling read-tag mode
+      }
+
+      if (inventoryMode && !inventoryData.has(epcHex)) {
         if (isDbgLogEnabled) {
           console.log(`[DEBUG] EPC ${epcHex} not in inventory. Skipping.`);
         }
-        return; 
+        return;
       }
 
       const cumulativeEntry = scannedTagsCumulative.get(epcHex) || { count: 0, timestamp: '' };
       cumulativeEntry.count++;
       cumulativeEntry.timestamp = new Date().toISOString();
       scannedTagsCumulative.set(epcHex, cumulativeEntry);
-      
+
       const refreshEntry = scannedTagsRefresh.get(epcHex) || { count: 0, timestamp: '' };
       refreshEntry.count++;
       refreshEntry.timestamp = new Date().toISOString();
@@ -286,12 +318,12 @@ async function main() {
   // --- Handle Serial Port Events ---
   port.on('open', () => {
     if (isDbgLogEnabled) console.log('[DEBUG] Entering function port.on(\'open\')');
-    if (inventoryMode && !inventoryFilePath) { 
+    if (inventoryMode && !inventoryFilePath) {
       console.error(`❌ Inventory mode requires an inventory file.`);
       process.exit(1);
     }
     if (inventoryFilePath) { loadInventory(inventoryFilePath); }
-    if (mode === Constants.MODE_AUTO || mode === Constants.MODE_INVENTORY) { startAutoMode(); }
+    if (mode === Constants.MODE_AUTO || mode === Constants.MODE_INVENTORY || mode === Constants.MODE_READ_TAG) { startAutoMode(); }
   });
 
   port.on('data', (data) => {
@@ -337,6 +369,11 @@ async function main() {
 
   app.use(express.static(path.join(__dirname, 'web-app')));
 
+  app.get('/download-inventory', (req, res) => {
+    const filePath = path.join(__dirname, 'work', 'inventory.csv');
+    res.download(filePath);
+  });
+
   const server = app.listen(webServerPort, webServerHost, () => {
       console.log(`Web server listening at http://${webServerHost}:${webServerPort}`);
   });
@@ -356,27 +393,26 @@ async function main() {
           if (isDbgLogEnabled) console.log(`[DEBUG] Received command from client: ${command}`);
 
           if (command === 'start') {
+              mode = inventoryFilePath ? Constants.MODE_INVENTORY : Constants.MODE_AUTO;
+              readTagScans.clear();
               sendWithCrc(Buffer.from(Constants.HEX_SCAN_START, 'hex'), 'Received "start" from web client, starting scan');
           } else if (command === 'stop') {
+              readTagScans.clear();
               sendWithCrc(Buffer.from(Constants.HEX_SCAN_STOP, 'hex'), 'Received "stop" from web client, stopping scan');
+          } else if (command === 'read-tag') {
+              mode = Constants.MODE_READ_TAG;
+              readTagScans.clear(); // Reset for the new session
+              sendWithCrc(Buffer.from(Constants.HEX_SCAN_START, 'hex'), 'Received "read-tag" from web client, starting scan');
           } else if (command.startsWith('upload_inventory:')) {
               const csvData = command.substring('upload_inventory:'.length);
-              const tempFilePath = path.join(__dirname, 'work', 'temp_inventory.csv');
-              try {
-                  fs.writeFileSync(tempFilePath, csvData, 'utf8');
-                  console.log('✅ Temporary inventory file saved.');
-                  inventoryData.clear();
-                  loadInventory(tempFilePath);
+              parseInventoryData(csvData);
                   const newInitialInventory = Array.from(inventoryData.values()).map(item => ({...item, count: 0, timestamp: null}));
                   wss.clients.forEach(client => {
-                      if (client.readyState === 1) {
+                  if (client.readyState === 1) { // Check if the client is open
                           client.send(JSON.stringify({ initialInventory: newInitialInventory }));
                       }
                   });
-                  fs.unlinkSync(tempFilePath);
-              } catch (err) {
-                  console.error('❌ Failed to process uploaded inventory file:', err);
-              }
+              console.log('✅ Inventory updated from client upload.');
           }
       });
 
@@ -395,7 +431,7 @@ async function main() {
   if (inventoryFilePath) {
       loadInventory(inventoryFilePath);
   }
-  if (mode === Constants.MODE_AUTO || mode === Constants.MODE_INVENTORY) {
+  if (mode === Constants.MODE_AUTO || mode === Constants.MODE_INVENTORY || mode === Constants.MODE_READ_TAG) {
       startAutoMode();
   } else {
       console.log('Interactive mode is not supported in this combined version. Running in auto-inventory mode.');
@@ -432,11 +468,13 @@ async function main() {
     });
     scannedTagsRefresh.clear();
     
+    if (inventoryUpdates.length > 0) {
     wsClients.forEach(client => {
         if (client.readyState === 1) {
             client.send(JSON.stringify({ updates: inventoryUpdates }));
         }
     });
+  }
   }
 
   function generateTsv() {
@@ -458,7 +496,7 @@ async function main() {
       console.log('⚠️  No scanned EPC tags to save.');
       return;
     }
-    
+
     const tsvData = generateTsv();
     const filePath = path.join(__dirname, Constants.TSV_FILE_NAME);
 
