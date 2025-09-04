@@ -1,4 +1,4 @@
-// app.js - Front-end Logic for RFID Inventory Tracker
+// app.js - Front-end Logic for Smart Fridge Tracker
 
 document.addEventListener('DOMContentLoaded', () => {
     const epcTableBody = document.getElementById('epc-table-body');
