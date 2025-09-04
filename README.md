@@ -155,11 +155,12 @@ Use the following command to launch the Smart Fridge webserver and RFID scanning
 * Install pm2
 
 ```bash
-sudo apt install nodejs npm
+sudo apt install -y nodejs npm
 sudo npm install -g pm2
 ```
 
 * Enable pm2 auto-statup  
+
 ```bash
 pm2 startup
 ```
